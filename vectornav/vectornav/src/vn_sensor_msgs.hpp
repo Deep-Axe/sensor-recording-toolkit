@@ -97,10 +97,7 @@ inline static double deg2rad(double in) { return in * M_PI / 180.0; }
   /// TODO(Dereck): Find default covariance values
 
   // State Vars
-  uint8_t gps_fix_ = vectornav_msgs::msg::GpsGroup::GPSFIX_NOFIX;
-  geometry_msgs::msg::Vector3 gps_posu_;
-  geometry_msgs::msg::Vector3 ins_velbody_;
-  geometry_msgs::msg::Point ins_posecef_;
+  geometry_msgs::msg::Point ins_posecef_;  // pose position, updated by sub_vn_ins
 };
 }  // namespace vectornav
 #endif  // VECTORNAV__VN_SENSOR_MSGS_HPP_

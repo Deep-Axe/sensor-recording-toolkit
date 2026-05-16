@@ -252,50 +252,6 @@ void VnSensorMsgs::sub_vn_common(const vectornav_msgs::msg::CommonGroup::SharedP
     pub_pressure_->publish(msg);
   }
 
-  // GNSS
-  {
-    sensor_msgs::msg::NavSatFix msg;
-    msg.header = msg_in->header;
-
-    // Status
-    if (gps_fix_ == vectornav_msgs::msg::GpsGroup::GPSFIX_NOFIX) {
-      msg.status.status = sensor_msgs::msg::NavSatStatus::STATUS_NO_FIX;
-    } else {
-      msg.status.status = sensor_msgs::msg::NavSatStatus::STATUS_FIX;
-    }
-
-    // Position
-    msg.latitude = msg_in->position.x;
-    msg.longitude = msg_in->position.y;
-    msg.altitude = msg_in->position.z;
-
-    // Covariance (Convert NED to ENU)
-    /// TODO(Dereck): Use DOP for better estimate?
-    const std::vector<double> orientation_covariance_ = {
-      gps_posu_.y, 0.0000, 0.0000, 0.0000, gps_posu_.x, 0.0000, 0.0000, 0.0000, gps_posu_.z};
-
-    msg.position_covariance_type = sensor_msgs::msg::NavSatFix::COVARIANCE_TYPE_DIAGONAL_KNOWN;
-
-    pub_gnss_->publish(msg);
-  }
-
-  // Velocity
-  {
-    geometry_msgs::msg::TwistWithCovarianceStamped msg;
-    msg.header = msg_in->header;
-    if (use_enu) {
-      convert_vec_frd_to_rfu(ins_velbody_, msg.twist.twist.linear);
-      convert_vec_frd_to_rfu(msg_in->angularrate, msg.twist.twist.angular);
-    } else {
-      msg.twist.twist.linear = ins_velbody_;
-      msg.twist.twist.angular = msg_in->angularrate;
-    }
-
-    /// TODO(Dereck): Velocity Covariance
-
-    pub_velocity_->publish(msg);
-  }
-
   // Pose
   {
     geometry_msgs::msg::PoseWithCovarianceStamped msg;
@@ -338,12 +294,33 @@ void VnSensorMsgs::sub_vn_imu(const vectornav_msgs::msg::ImuGroup::SharedPtr msg
 
 /** Convert VN gps group data to ROS2 standard message types
    *
-   * TODO(Dereck): Consider alternate sync methods
+   * Sources /vectornav/gnss from raw GPS (poslla), valid at satellite lock.
+   * Only publishes when GPSGROUP_POSLLA is enabled in gpsField.
    */
 void VnSensorMsgs::sub_vn_gps(const vectornav_msgs::msg::GpsGroup::SharedPtr msg_in)
 {
-  gps_fix_ = msg_in->fix;
-  gps_posu_ = msg_in->posu;
+  sensor_msgs::msg::NavSatFix msg;
+  msg.header = msg_in->header;
+
+  msg.status.status = (msg_in->fix == vectornav_msgs::msg::GpsGroup::GPSFIX_NOFIX)
+    ? sensor_msgs::msg::NavSatStatus::STATUS_NO_FIX
+    : sensor_msgs::msg::NavSatStatus::STATUS_FIX;
+  msg.status.service = sensor_msgs::msg::NavSatStatus::SERVICE_GPS;
+
+  msg.latitude  = msg_in->poslla.x;
+  msg.longitude = msg_in->poslla.y;
+  msg.altitude  = msg_in->poslla.z;
+
+  // posu is 1-sigma stddev in NED metres — NavSatFix needs variance in ENU frame
+  // ENU[0] = East var  = posu.y^2
+  // ENU[4] = North var = posu.x^2
+  // ENU[8] = Up var    = posu.z^2
+  msg.position_covariance[0] = msg_in->posu.y * msg_in->posu.y;
+  msg.position_covariance[4] = msg_in->posu.x * msg_in->posu.x;
+  msg.position_covariance[8] = msg_in->posu.z * msg_in->posu.z;
+  msg.position_covariance_type = sensor_msgs::msg::NavSatFix::COVARIANCE_TYPE_DIAGONAL_KNOWN;
+
+  pub_gnss_->publish(msg);
 }
 
 /** Convert VN attitude group data to ROS2 standard message types
@@ -355,11 +332,21 @@ void VnSensorMsgs::sub_vn_attitude(const vectornav_msgs::msg::AttitudeGroup::Sha
 
 /** Convert VN ins group data to ROS2 standard message types
    *
+   * Publishes /vectornav/velocity_body directly from InsGroup — no cached state,
+   * no race condition with sub_vn_common on cold start.
    */
 void VnSensorMsgs::sub_vn_ins(const vectornav_msgs::msg::InsGroup::SharedPtr msg_in)
 {
-  ins_velbody_ = msg_in->velbody;
-  ins_posecef_ = msg_in->posecef;
+  ins_posecef_ = msg_in->posecef;  // still needed by pose block in sub_vn_common
+
+  geometry_msgs::msg::TwistWithCovarianceStamped msg;
+  msg.header = msg_in->header;
+  if (use_enu) {
+    convert_vec_frd_to_rfu(msg_in->velbody, msg.twist.twist.linear);
+  } else {
+    msg.twist.twist.linear = msg_in->velbody;
+  }
+  pub_velocity_->publish(msg);
 }
 
 /** Convert VN gps2 group data to ROS2 standard message types

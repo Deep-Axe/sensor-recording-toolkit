@@ -138,7 +138,7 @@ class DriverNode(Node):
         if start_vn:
             self._start_process("vectornav", ["ros2", "launch", "vectornav", "vectornav.launch.py"])
             self._vn_bag_timer = self.create_timer(
-                4.0,
+                8.0,
                 lambda: self._start_vectornav_bag(session_path, include_lidar=combine_lidar_vn_bag),
             )
 
