@@ -1,3 +1,6 @@
+# Local sensor recordings
+/recd_data/
+
 devel/
 logs/
 build/
