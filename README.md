@@ -1,6 +1,7 @@
 # Sensor Recording Toolkit
 
-This repo allows for recording data from the FMDV Sensor stack
+Open source recording toolkit for Hesai Pandar 40P, Vectornav VN-200 and Zed2i Stereo camera
+
 
 # Build and Run Commands
 Build in the current working directory and source it. Alternatively, for individual module builds, if needed, navigate to each subdirectory (Hesai_ROS_2.0, zed_ros2, zed2i, vectornav, etc.), colcon build individually, and source the respective setup files.
